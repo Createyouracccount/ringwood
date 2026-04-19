@@ -51,6 +51,15 @@ class Fts5Index(IndexAdapter):
         self.db_path = Path(db_path).expanduser()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self.db_path, isolation_level=None)
+        # Concurrency: the long-running MCP server holds one connection while
+        # the Stop hook spawns a separate `ringwood-capture` process that also
+        # writes. Default SQLite raises "database is locked" on the second
+        # writer, so the hook's upsert fails silently — the page file lands on
+        # disk but never reaches the FTS index, and later searches return no
+        # hits. WAL lets readers and a writer coexist; busy_timeout lets the
+        # second writer wait its turn instead of blowing up immediately.
+        self._conn.execute("PRAGMA journal_mode = WAL")
+        self._conn.execute("PRAGMA busy_timeout = 5000")
         self._conn.executescript(_SCHEMA)
 
     # ── IndexAdapter ─────────────────────────────────────────────────────
