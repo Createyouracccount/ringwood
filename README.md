@@ -20,7 +20,7 @@ every time you chat.
 ### Option A — one line from a clone (recommended while we're pre-release)
 
 ```bash
-git clone https://github.com/ringwood/ringwood && cd ringwood
+git clone https://github.com/Createyouracccount/ringwood && cd ringwood
 ./bootstrap.sh --hook
 ```
 

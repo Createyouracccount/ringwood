@@ -4,7 +4,7 @@ MCP server that exposes [ringwood](https://pypi.org/project/ringwood/)
 to any Model-Context-Protocol client: Claude Code, Claude.ai (Custom
 Connectors), Cursor, Windsurf, Zed.
 
-**Most users should use the [ringwood launcher](https://github.com/ringwood/ringwood)
+**Most users should use the [ringwood launcher](https://github.com/Createyouracccount/ringwood)
 instead of installing this package directly.** The launcher handles
 registration, the `.env` template, and the Stop-hook wiring.
 
@@ -63,5 +63,5 @@ Six tools, two resource templates:
 
 ## License
 
-MIT. See [main README](https://github.com/ringwood/ringwood#readme) for
+MIT. See [main README](https://github.com/Createyouracccount/ringwood#readme) for
 docs, A/B quality numbers, and troubleshooting.

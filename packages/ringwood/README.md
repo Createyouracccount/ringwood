@@ -1,11 +1,11 @@
 # ringwood
 
-Pure-Python core of [ringwood](https://github.com/ringwood/ringwood) —
+Pure-Python core of [ringwood](https://github.com/Createyouracccount/ringwood) —
 a compounding knowledge wiki for Claude. Protocol-agnostic. The MCP server,
 the npm launcher, and the LangChain adapter are all thin shells on top
 of this library.
 
-**See the main [README](https://github.com/ringwood/ringwood#readme)** for
+**See the main [README](https://github.com/Createyouracccount/ringwood#readme)** for
 the user-facing walkthrough, A/B quality numbers, and troubleshooting.
 This file is the minimum a Python importer needs.
 

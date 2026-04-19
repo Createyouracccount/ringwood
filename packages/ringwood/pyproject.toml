@@ -46,11 +46,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ringwood/ringwood"
-Documentation = "https://github.com/ringwood/ringwood#readme"
-Changelog = "https://github.com/ringwood/ringwood/blob/main/CHANGELOG.md"
-Issues = "https://github.com/ringwood/ringwood/issues"
-Repository = "https://github.com/ringwood/ringwood"
+Homepage = "https://github.com/Createyouracccount/ringwood"
+Documentation = "https://github.com/Createyouracccount/ringwood#readme"
+Changelog = "https://github.com/Createyouracccount/ringwood/blob/main/CHANGELOG.md"
+Issues = "https://github.com/Createyouracccount/ringwood/issues"
+Repository = "https://github.com/Createyouracccount/ringwood"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ringwood"]

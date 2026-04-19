@@ -7,7 +7,7 @@ same.
 ## Development setup
 
 ```bash
-git clone https://github.com/ringwood/ringwood
+git clone https://github.com/Createyouracccount/ringwood
 cd ringwood
 ./bootstrap.sh --dev        # editable install + test deps + runs tests
 ```

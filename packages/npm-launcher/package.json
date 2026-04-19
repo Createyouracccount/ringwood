@@ -25,13 +25,13 @@
     "rag",
     "anthropic"
   ],
-  "homepage": "https://github.com/ringwood/ringwood#readme",
+  "homepage": "https://github.com/Createyouracccount/ringwood#readme",
   "bugs": {
-    "url": "https://github.com/ringwood/ringwood/issues"
+    "url": "https://github.com/Createyouracccount/ringwood/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ringwood/ringwood.git",
+    "url": "https://github.com/Createyouracccount/ringwood.git",
     "directory": "packages/npm-launcher"
   },
   "files": [

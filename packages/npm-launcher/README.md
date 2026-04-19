@@ -1,6 +1,6 @@
 # ringwood (launcher)
 
-Zero-config CLI that registers [ringwood](https://github.com/ringwood/ringwood)
+Zero-config CLI that registers [ringwood](https://github.com/Createyouracccount/ringwood)
 with Claude Code and exposes its inspection commands.
 
 ```bash
@@ -47,7 +47,7 @@ Python `ringwood-cli` entry point shipped by `ringwood-mcp`.
 
 ## Full documentation
 
-[github.com/ringwood/ringwood](https://github.com/ringwood/ringwood)
+[github.com/Createyouracccount/ringwood](https://github.com/Createyouracccount/ringwood)
 
 ## License
 

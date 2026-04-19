@@ -33,9 +33,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ringwood/ringwood"
-Issues = "https://github.com/ringwood/ringwood/issues"
-Repository = "https://github.com/ringwood/ringwood"
+Homepage = "https://github.com/Createyouracccount/ringwood"
+Issues = "https://github.com/Createyouracccount/ringwood/issues"
+Repository = "https://github.com/Createyouracccount/ringwood"
 
 [project.scripts]
 ringwood-mcp = "ringwood_mcp.server:main"

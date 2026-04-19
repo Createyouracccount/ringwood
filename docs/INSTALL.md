@@ -19,7 +19,7 @@ Restart Claude Code. Done.
 ## Manual install (advanced)
 
 ```bash
-git clone https://github.com/ringwood/ringwood
+git clone https://github.com/Createyouracccount/ringwood
 cd ringwood
 uv venv
 uv pip install -e packages/ringwood
