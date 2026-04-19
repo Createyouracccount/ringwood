@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# ringwood — thin shim around packages/npm-launcher/bin/ringwood.js.
+#
+# Until the npm package is published (Phase 4), this is the canonical
+# command for clone+bootstrap installs. Add this dir to PATH:
+#
+#   export PATH="$(pwd)/bin:$PATH"       # from the repo root
+#
+# Then `ringwood doctor`, `ringwood stats`, etc. work directly.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec node "$HERE/../packages/npm-launcher/bin/ringwood.js" "$@"

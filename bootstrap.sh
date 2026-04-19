@@ -10,7 +10,7 @@
 #   1. verifies Python ≥ 3.10 and Node ≥ 18
 #   2. creates a local .venv (unless --system)
 #   3. installs ringwood + ringwood-mcp (editable if --dev)
-#   4. runs `npx ringwood init` to register the MCP server
+#   4. runs the launcher's `init` to register the MCP server
 #   5. seeds ~/ringwood/.env if missing
 #   6. prints the next step (add ANTHROPIC_API_KEY)
 
@@ -125,6 +125,8 @@ say "  $([ -n "${NEXT_N:-}" ] && echo "" || echo "2.") restart Claude Code, then
 say "       > remember: we use snake_case for filenames"
 say "       > what's our filename convention?"
 say ""
-say "Inspect growth:   ${BOLD}npx ringwood stats${RST}"
-say "Timeline:         ${BOLD}npx ringwood timeline${RST}"
-say "Integrity:        ${BOLD}npx ringwood lint${RST}"
+say "Add the CLI to PATH: ${BOLD}export PATH=\"$HERE/bin:\$PATH\"${RST}"
+say ""
+say "Inspect growth:   ${BOLD}ringwood stats${RST}"
+say "Timeline:         ${BOLD}ringwood timeline${RST}"
+say "Integrity:        ${BOLD}ringwood lint${RST}"

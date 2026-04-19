@@ -64,6 +64,19 @@ claude mcp list
 You should see `ringwood: ✓ Connected`. If it hangs on "Checking…" for
 more than a few seconds, jump to [Troubleshoot](#troubleshoot).
 
+### Put `ringwood` on your PATH
+
+The CLI (`ringwood stats`, `ringwood doctor`, …) lives at `./bin/ringwood`
+in this repo until the npm package ships (Phase 4). Add it to your PATH:
+
+```bash
+export PATH="$(pwd)/bin:$PATH"     # run from the repo root
+# or, to persist across shells:
+echo "export PATH=\"$(pwd)/bin:\$PATH\"" >> ~/.zshrc
+```
+
+Then `ringwood doctor` / `ringwood stats` / etc. work from anywhere.
+
 ## Use
 
 Three things a user does, in order of how often they do them.
@@ -105,7 +118,7 @@ the wiki grows audible over time.
 
 ```bash
 # See what the wiki actually captured this week
-npx ringwood stats
+ringwood stats
 
 📊 Wiki stats (week)
 questions answered     14
@@ -118,20 +131,20 @@ invalidated            1
      5×  concept/prompt-caching-economics
 
 # Audit log — each line is one engine decision
-npx ringwood timeline --tail 10
+ringwood timeline --tail 10
 
 - [2026-04-19T01:42:12Z] ADD decision/asia-seoul-timezone-alerts | new policy
 - [2026-04-19T01:42:30Z] SUPERSEDE decision/utc-everywhere → decision/asia-seoul-timezone-alerts
 
 # Diff the last week
-npx ringwood diff --days 7
+ringwood diff --days 7
 
 + decision/asia-seoul-timezone-alerts        Asia/Seoul 알림 정책
 ~ decision/db-migration-two-phase             두 단계 배포 방식
 ✕ decision/utc-everywhere                     UTC 전면 정책 (invalidated)
 
 # Integrity check
-npx ringwood lint
+ringwood lint
 
 ✓ clean
 ```
@@ -216,7 +229,7 @@ ringwood/
 └── packages/
     ├── ringwood/           protocol-agnostic Python library
     ├── ringwood-mcp/        ringwood exposed over MCP (stdio + HTTP)
-    └── npm-launcher/        npx ringwood init
+    └── npm-launcher/        the CLI behind `./bin/ringwood` (init/stats/…)
 ```
 
 Three layers. Only `ringwood` contains logic; the other two are thin
@@ -228,15 +241,20 @@ entirely.
 Run the doctor first. It checks everything at once:
 
 ```bash
-npx ringwood doctor
+ringwood doctor          # after you've added ./bin to PATH
+# or, without PATH:
+./bin/ringwood doctor
 ```
+
+> **Note:** `npx ringwood` does **not** work yet — the npm package is
+> unpublished until Phase 4. Use the local `ringwood` shim instead.
 
 ### "ringwood is not registered"
 
 You haven't run `init` yet or `~/.claude.json` got replaced. Run:
 
 ```bash
-npx ringwood init
+ringwood init
 ```
 
 Your previous config is always backed up at `~/.claude.json.bak-<epoch>`.

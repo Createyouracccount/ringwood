@@ -39,3 +39,4 @@ wiki-data/
 # ──────── internal-only design docs ────────
 # Kept locally for reference, never published.
 PLAN.md
+docs/_local/
