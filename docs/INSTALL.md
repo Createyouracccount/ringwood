@@ -1,20 +1,38 @@
 # Installation
 
-## The 30-second path
+## Current path — clone + bootstrap (pre-release)
+
+```bash
+git clone https://github.com/Createyouracccount/ringwood
+cd ringwood
+./bootstrap.sh --hook
+```
+
+`bootstrap.sh`:
+
+1. Verifies Python ≥ 3.10 and Node ≥ 18.
+2. Creates `.venv` and editable-installs `ringwood` + `ringwood-mcp`.
+3. Runs the launcher, which detects the local install on PATH and records
+   its **absolute path** in `~/.claude.json` (so Claude Code can spawn the
+   server even without our venv being active).
+4. Optionally installs the Stop hook (`--hook`) so Q&A is auto-captured.
+5. Seeds `~/ringwood/.env` (chmod 600) for your API key.
+
+Restart Claude Code, then `claude mcp list` should show
+`ringwood: ✓ Connected`.
+
+## Future path (after PyPI release)
 
 ```
 npx ringwood init
 ```
 
-That's intended to be the entire install experience. Under the hood, the
-launcher:
+Launcher detection order:
 
-1. Detects a Python runner (preference order: `uvx` → `pipx` → `python3`).
-2. Ensures the `ringwood-mcp` package is installed (or runs it on demand via `uvx`).
-3. Creates `~/ringwood/` as the wiki root.
-4. Backs up `~/.claude.json` and registers the `ringwood` MCP server.
-
-Restart Claude Code. Done.
+1. Pre-installed `ringwood-mcp` on PATH (contributors who cloned).
+2. `uvx --from ringwood-mcp` — downloads from PyPI on demand.
+3. `pipx install ringwood-mcp` — persistent install.
+4. `python3 -m pip install --user ringwood-mcp` — fallback.
 
 ## Manual install (advanced)
 

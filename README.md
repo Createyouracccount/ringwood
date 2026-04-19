@@ -42,14 +42,28 @@ node packages/npm-launcher/bin/ringwood.js init --with-hook
 ### Add your Anthropic key
 
 The engine works without a key (rule-based fallback), but quality jumps
-dramatically with one. Edit the file `bootstrap.sh` wrote for you:
+dramatically with one. Get a key at
+[console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys),
+then open `~/ringwood/.env` in your editor:
 
 ```bash
-$EDITOR ~/ringwood/.env
-#  uncomment:  ANTHROPIC_API_KEY=sk-ant-...
+code ~/ringwood/.env     # VS Code
+# or
+nano ~/ringwood/.env     # terminal
 ```
 
-Restart Claude Code. Done.
+Uncomment `ANTHROPIC_API_KEY=` and paste the key. Save.
+
+### Verify it's wired up
+
+Restart Claude Code (`exit` then reopen), then:
+
+```bash
+claude mcp list
+```
+
+You should see `ringwood: ✓ Connected`. If it hangs on "Checking…" for
+more than a few seconds, jump to [Troubleshoot](#troubleshoot).
 
 ## Use
 
@@ -248,6 +262,39 @@ Three culprits in order:
 2. The server crashed on startup. `ringwood serve` from a terminal to see
    the error.
 3. The wrong Python runner. `doctor` prints which one we chose.
+
+### `claude mcp list` hangs on "Checking…"
+
+If `~/.claude.json` was patched with `uvx --from ringwood-mcp …` but the
+package isn't on PyPI yet (i.e. you cloned from a pre-release commit), uvx
+tries to download forever. Fix by re-running `bootstrap.sh` — the launcher
+now prefers a local install on PATH and records its absolute path in
+`~/.claude.json` instead:
+
+```bash
+cd /path/to/ringwood
+./bootstrap.sh --hook
+```
+
+Verify the fix:
+
+```bash
+python3 -c "import json; c=json.load(open('~/.claude.json'.replace('~', __import__('os').path.expanduser('~')))); print(c['mcpServers']['ringwood']['command'])"
+# → /absolute/path/to/ringwood-mcp  (NOT 'uvx')
+```
+
+### `permission denied: ~/ringwood/.env` when editing
+
+`$EDITOR` isn't set, so the shell tries to "run" the `.env` file. Use a
+real editor name:
+
+```bash
+code ~/ringwood/.env     # VS Code
+nano ~/ringwood/.env     # terminal
+vim  ~/ringwood/.env     # vim
+```
+
+(If you want `$EDITOR` set persistently: `echo 'export EDITOR=code' >> ~/.zshrc`.)
 
 ### Korean/Japanese queries miss obvious pages
 
