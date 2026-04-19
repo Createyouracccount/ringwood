@@ -235,6 +235,18 @@ function passthrough(entrypoint, extraArgs) {
 function detectRunner(opts = {}) {
   const candidates = [
     {
+      // Prefer a pre-installed ringwood-mcp on PATH (editable install from
+      // bootstrap.sh, or a system-wide pipx/pip install). Resolve to the
+      // absolute path so the MCP server still launches when Claude spawns
+      // it without our PATH (e.g. outside the activated venv).
+      label: "local ringwood-mcp on PATH",
+      probe: () => resolveOnPath("ringwood-mcp") !== null,
+      exec: (entry, args) => ({
+        cmd: resolveOnPath(entry) || entry,
+        argv: args,
+      }),
+    },
+    {
       label: "uvx (recommended)",
       probe: () => which("uvx"),
       exec: (entry, args) => ({
@@ -349,6 +361,17 @@ function writeConfig(conf) {
 function which(bin) {
   try { execSync(`command -v ${bin}`, { stdio: "ignore", shell: "/bin/sh" }); return true; }
   catch { return false; }
+}
+function resolveOnPath(bin) {
+  // Absolute path so downstream spawners don't depend on our $PATH.
+  // Whitelist the binaries we actually resolve to avoid passing user input
+  // into a shell even accidentally.
+  const allowed = new Set(["ringwood-mcp", "ringwood-capture", "ringwood-cli"]);
+  if (!allowed.has(bin)) return null;
+  try {
+    const out = execSync(`command -v ${bin}`, { shell: "/bin/sh", encoding: "utf8" }).trim();
+    return out || null;
+  } catch { return null; }
 }
 function run(cmd, args) {
   const r = spawnSync(cmd, args, { stdio: "inherit" });
