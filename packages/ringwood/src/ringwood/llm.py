@@ -24,7 +24,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, Protocol, Type, TypeVar
+from typing import Any, Generic, Protocol, Type, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -68,7 +68,7 @@ class TextResponse:
 
 
 @dataclass
-class StructuredResponse[T]:
+class StructuredResponse(Generic[T]):
     parsed: T | None           # None on refusal / parse failure — caller must guard
     raw_text: str
     usage: LLMUsage
