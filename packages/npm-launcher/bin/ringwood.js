@@ -233,12 +233,27 @@ function passthrough(entrypoint, extraArgs) {
 // ── runner detection ────────────────────────────────────────────────────────
 
 function detectRunner(opts = {}) {
+  // __dirname = <repo>/packages/npm-launcher/bin → repo root is three up.
+  const REPO_VENV_BIN = path.resolve(__dirname, "..", "..", "..", ".venv", "bin");
+  const venvHas = (name) => fs.existsSync(path.join(REPO_VENV_BIN, name));
+
   const candidates = [
     {
-      // Prefer a pre-installed ringwood-mcp on PATH (editable install from
-      // bootstrap.sh, or a system-wide pipx/pip install). Resolve to the
-      // absolute path so the MCP server still launches when Claude spawns
-      // it without our PATH (e.g. outside the activated venv).
+      // The install layout bootstrap.sh creates: an editable install inside
+      // the repo's .venv. Detected without needing the user to `activate` —
+      // we know our own location relative to the repo root. This is what
+      // makes `ringwood stats` work in a fresh shell after bootstrap.
+      label: "repo .venv (editable)",
+      probe: () => venvHas("ringwood-mcp"),
+      exec: (entry, args) => ({
+        cmd: path.join(REPO_VENV_BIN, entry),
+        argv: args,
+      }),
+    },
+    {
+      // Pre-installed ringwood-mcp on PATH (system-wide pipx/pip install,
+      // or a venv the user already activated). Resolve to the absolute
+      // path so downstream spawners don't depend on our $PATH.
       label: "local ringwood-mcp on PATH",
       probe: () => resolveOnPath("ringwood-mcp") !== null,
       exec: (entry, args) => ({
