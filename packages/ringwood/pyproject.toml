@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ringwood"
+version = "0.1.0"
+description = "Compounding knowledge wiki for Claude — pure-Python core, protocol-agnostic."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "ringwood contributors" }]
+keywords = [
+    "llm", "wiki", "knowledge", "rag", "memory", "mcp", "claude",
+    "anthropic", "compounding", "bitemporal",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Text Processing :: Indexing",
+    "Typing :: Typed",
+]
+dependencies = [
+    "pyyaml>=6.0",
+    "anthropic>=0.96",
+    "pydantic>=2.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+vector = ["lancedb>=0.16"]
+rerank = ["cohere>=5.0"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+    "build>=1.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/ringwood/ringwood"
+Documentation = "https://github.com/ringwood/ringwood#readme"
+Changelog = "https://github.com/ringwood/ringwood/blob/main/CHANGELOG.md"
+Issues = "https://github.com/ringwood/ringwood/issues"
+Repository = "https://github.com/ringwood/ringwood"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ringwood"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "README.md", "LICENSE"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

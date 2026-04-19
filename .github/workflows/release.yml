@@ -1,0 +1,52 @@
+name: Release
+
+# Manual trigger only — releases are human decisions.
+# After a successful run, publish to PyPI/npm locally with `make publish`
+# (planned) or use the artifacts from the workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "git tag to release (e.g. v0.1.0)"
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: python -m pip install --upgrade pip build twine
+
+      - name: Build Python packages
+        run: |
+          cd packages/ringwood && python -m build && cd -
+          cd packages/ringwood-mcp && python -m build && cd -
+
+      - name: Check Python packages
+        run: |
+          python -m twine check packages/ringwood/dist/*
+          python -m twine check packages/ringwood-mcp/dist/*
+
+      - name: npm pack
+        run: |
+          cd packages/npm-launcher
+          npm pack
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ inputs.tag }}
+          path: |
+            packages/ringwood/dist/*
+            packages/ringwood-mcp/dist/*
+            packages/npm-launcher/*.tgz

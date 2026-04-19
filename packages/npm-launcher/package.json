@@ -1,0 +1,42 @@
+{
+  "name": "ringwood",
+  "version": "0.1.0",
+  "description": "The memory layer your Claude has been missing. 30-second install: npx ringwood init.",
+  "license": "MIT",
+  "bin": {
+    "ringwood": "bin/ringwood.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "mcp",
+    "model-context-protocol",
+    "wiki",
+    "memory",
+    "knowledge-base",
+    "rag",
+    "anthropic"
+  ],
+  "homepage": "https://github.com/ringwood/ringwood#readme",
+  "bugs": {
+    "url": "https://github.com/ringwood/ringwood/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ringwood/ringwood.git",
+    "directory": "packages/npm-launcher"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ]
+}

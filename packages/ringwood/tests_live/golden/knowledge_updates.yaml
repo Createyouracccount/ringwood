@@ -1,0 +1,134 @@
+# LongMemEval-style 지식 업데이트 평가 셋 (한국어)
+#
+# 각 케이스는 다음 순서로 평가:
+#   1. setup_events 를 순서대로 wiki.ingest() — 초기 상태 구축
+#   2. new_event 를 ingest → Decision 엔진이 expected_action 을 골라야 함
+#   3. (선택) query 를 wiki.search() → gold_answer 에 해당하는 페이지가 top-1 이어야
+#   4. must_not_contain 이 있으면 검색 결과·답변에 등장하면 즉시 실패 (stale retention)
+#
+# 참고: LongMemEval (Wu et al., ICLR 2025) / mem0 judge 프롬프트 (arXiv 2504.19413)
+
+cases:
+  # ── ADD: 전혀 새로운 정보 ────────────────────────────────────────────────
+  - id: ADD-01
+    category: add
+    setup_events: []
+    new_event:
+      text: "나는 파이썬 백엔드 개발자이고 3년차야."
+      source: chat
+    expected_action: ADD
+    rationale: "empty wiki → always ADD"
+
+  - id: ADD-02
+    category: add
+    setup_events:
+      - text: "나는 서울에 살고 있어."
+    new_event:
+      text: "내 주력 언어는 TypeScript야."
+      source: chat
+    expected_action: ADD
+    rationale: "주거지와 언어는 겹치지 않는 별개 entity"
+
+  # ── UPDATE: 같은 entity 에 대한 새 정보 ────────────────────────────────
+  - id: UPDATE-01
+    category: update
+    setup_events:
+      - text: "우리 팀 백엔드 컨벤션은 snake_case 함수명을 쓴다."
+    new_event:
+      text: "컨벤션 보강: snake_case 는 함수명에만, 변수명은 camelCase 유지."
+      source: team-meeting
+    expected_action: UPDATE
+    query: "우리 팀 변수명 컨벤션은?"
+    must_contain_any: ["camelCase"]
+    rationale: "기존 규칙을 정제·확장하는 정보"
+
+  - id: UPDATE-02
+    category: update
+    setup_events:
+      - text: "프로젝트 X 의 DB 는 Postgres 15 를 쓴다."
+    new_event:
+      text: "프로젝트 X DB 를 Postgres 16 으로 업그레이드했음."
+      source: infra-ticket
+    # UPDATE (덮어쓰기) or DELETE (supersession, invalidate_at 스탬프) 둘 다 합리적.
+    # 둘 다 동일한 효과를 내야 한다: 검색에서 구버전이 사라지고 신버전이 보인다.
+    expected_action_any: [UPDATE, DELETE]
+    query: "프로젝트 X DB 버전"
+    must_contain_any: ["16", "Postgres 16"]
+    must_not_contain: ["Postgres 15"]
+    rationale: "버전 업그레이드 — UPDATE/DELETE 모두 허용, 효과만 검증"
+
+  # ── NOOP: 의미상 동일 ──────────────────────────────────────────────────
+  - id: NOOP-01
+    category: noop
+    setup_events:
+      - text: "내 생일은 8월 8일이야."
+    new_event:
+      text: "내 생일은 8/8."
+      source: chat
+    expected_action: NOOP
+    rationale: "날짜 표현만 다른 동일 사실"
+
+  - id: NOOP-02
+    category: noop
+    setup_events:
+      - text: "프롬프트 캐싱은 Claude API 입력 토큰을 최대 90% 절감한다."
+    new_event:
+      text: "Claude API prompt caching 으로 input token 비용을 90%까지 줄일 수 있음."
+      source: chat
+    expected_action: NOOP
+    rationale: "한영 혼용이지만 같은 주장"
+
+  # ── DELETE/INVALIDATE: 모순 ────────────────────────────────────────────
+  - id: CONTRADICTION-01
+    category: contradiction
+    setup_events:
+      - text: "Claude API prompt caching TTL 은 5분이 유일한 옵션이다."
+    new_event:
+      text: "2026-04 업데이트: Claude API prompt caching 에 1시간 TTL 옵션이 추가됐다. 5분은 기본값으로 유지."
+      source: https://anthropic.com/news/prompt-caching
+    expected_action_any: [UPDATE, DELETE]
+    query: "prompt caching 에서 TTL 옵션은?"
+    must_contain_any: ["1시간", "1h"]
+    rationale: "새 옵션 추가 → 과거 '유일' 주장은 invalidate, 두 TTL 모두 설명해야 함"
+
+  - id: CONTRADICTION-02
+    category: contradiction
+    setup_events:
+      - text: "우리 회사는 재택근무를 허용하지 않는다."
+    new_event:
+      text: "2026-03 이후 재택근무 주 2일 허용으로 정책 변경."
+      source: hr-notice
+    expected_action_any: [UPDATE, DELETE]
+    query: "재택근무 정책"
+    # UPDATE 경로에서는 rewriter가 과거 주장을 <!-- invalid_at: ... --> 마커로
+    # 본문에 보존할 수 있음 (이력 감사 목적). 여기서는 "새 정책이 제대로 자리
+    # 잡았는가" 만 검증. invalidate 누수는 CONTRADICTION-01 이 담당.
+    must_contain_any: ["주 2일", "허용", "정책 변경"]
+    rationale: "정책 반전 — 새 상태가 검색 결과에 잡히는지만 검증"
+
+  # ── TEMPORAL: 시점 기준 질의 ───────────────────────────────────────────
+  - id: TEMPORAL-01
+    category: temporal
+    setup_events:
+      - text: "2024-09 에 Postgres 14 에서 15 로 마이그레이션 진행함."
+      - text: "2025-06 에 Postgres 15 에서 16 으로 재마이그레이션."
+    new_event:
+      text: "2025-06 마이그레이션 시 downtime 은 12분이었다."
+      source: postmortem
+    expected_action: UPDATE
+    query: "Postgres 마이그레이션 이력은?"
+    must_contain_any: ["14", "15", "16"]
+    rationale: "여러 이력이 모두 검색에 나와야 함"
+
+  # ── ABSTENTION: 없는 정보 ─────────────────────────────────────────────
+  - id: ABSTENTION-01
+    category: abstention
+    setup_events:
+      - text: "프로젝트 X 는 2025-03 에 시작됐다."
+    # 검색 자체는 "프로젝트 X" 페이지를 반환해도 됨 (엔티티 중심 BM25).
+    # 중요한 건 그 페이지에 기술 스택 정보가 **들어있지 않다**는 점 —
+    # must_not_contain 으로 hallucination 없음을 검증한다.
+    query: "프로젝트 X 의 기술 스택"
+    must_not_contain: ["Python", "TypeScript", "Go", "Rust", "Java",
+                       "Postgres", "MongoDB", "React", "Django"]
+    rationale: "저장된 적 없는 속성 — 검색은 되어도 기술명이 뽑히면 hallucination"

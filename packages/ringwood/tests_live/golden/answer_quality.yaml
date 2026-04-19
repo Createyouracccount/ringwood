@@ -1,0 +1,77 @@
+# Answer-quality A/B scenarios.
+#
+# 각 시나리오는:
+#   1. history    — 위키에 사전 저장될 Q&A 또는 사실들 (세션 1, 2, 3 …)
+#   2. new_query  — 나중 세션에서 들어올 진짜 질문
+#   3. gold       — 위키를 활용한 답변이 반드시 담아야 할 정보
+#   4. only_with_wiki — 위키 없이 바닐라 LLM은 원칙적으로 알 수 없는 사실
+#
+# 평가 축:
+#   - A. 바닐라 Claude (history 모름) — 최선을 다해 답변
+#   - B. Claude + our wiki (wiki.search → 컨텍스트 주입) — 답변
+#   - Judge: gold 의 핵심 사실을 담고 있는가 (0/1), only_with_wiki 필드를
+#            맞췄는가 (0/1)
+#
+# "만약 이걸 맞춘다면 위키가 진짜로 값을 만든다"는 시나리오만 남기고,
+# 바닐라가 일반 지식으로도 맞출 수 있는 시나리오는 제외한다.
+
+scenarios:
+  - id: Q1-team-convention
+    description: "팀 내부 규약 — 위키에만 있는 사실"
+    history:
+      - "우리 팀 백엔드는 DB 마이그레이션 시 반드시 두 단계로 나눈다: 1단계 스키마만 배포(구/신 양쪽 허용), 2단계 애플리케이션 스위치. 이유는 zero-downtime 유지."
+      - "마이그레이션 롤백은 forward-only 정책: DB down은 절대 안 하고 새 마이그레이션을 추가로 배포한다."
+    new_query: "Postgres 마이그레이션을 안전하게 진행하려면 우리 팀 방식은 뭐야?"
+    gold_must_include:
+      - "두 단계"
+      - "forward-only"
+    only_with_wiki: "우리 팀의 forward-only 롤백 정책"
+
+  - id: Q2-decision-history
+    description: "과거 결정 이력 — 이유(why)까지 기억해야 함"
+    history:
+      - "2025-09에 GraphQL 도입을 검토했으나 결정 보류. 이유: 프론트엔드 팀 3명 중 2명이 스키마 관리에 회의적, 기존 REST로 이미 해결된 N+1 케이스가 소수."
+      - "2026-02에 REST + JSON:API 스펙으로 최종 결정. 이유: 팀 학습 비용 최소화, OpenAPI 툴체인 이미 구축됨."
+    new_query: "우리 왜 GraphQL 안 썼었지?"
+    gold_must_include:
+      - "스키마 관리"
+      - "학습 비용"
+    only_with_wiki: "2026-02 REST + JSON:API 최종 결정"
+
+  - id: Q3-contradiction-resolved
+    description: "모순 해결 — 구버전 정보가 새겨졌다가 덮인 경우"
+    history:
+      - "우리 프로젝트 타임존 기본은 UTC로 통일한다. 로컬 표시는 클라이언트 책임."
+      - "2026-03 정책 변경: 내부 DB 저장은 여전히 UTC, 그러나 사용자에게 보내는 알림과 리포트는 Asia/Seoul로 포맷팅한다. 고객사 요청 반영."
+    new_query: "사용자 알림 이메일의 시간 표기는 어느 타임존이지?"
+    gold_must_include:
+      - "Asia/Seoul"
+    must_not_include:
+      - "알림을 UTC로 보낸다"
+      - "알림 시간은 UTC"
+    only_with_wiki: "2026-03에 알림만 Asia/Seoul로 변경됐다는 사실"
+
+  - id: Q4-compound-synthesis
+    description: "여러 이력을 합성해야 답이 나오는 질문"
+    history:
+      - "결제 모듈은 2025-07에 Toss Payments로 전환했다."
+      - "환불 정책: 결제 후 7일 이내 전액, 7~30일 부분환불(수수료 10%), 30일 초과 불가."
+      - "2025-11에 구독 상품 추가: 월 구독은 다음 결제일 전까지 언제든 해지, 이미 결제된 주기의 환불은 없음."
+    new_query: "연간 구독 상품을 3개월 쓰다가 해지하면 환불 받을 수 있어?"
+    gold_must_include:
+      - "없"  # "없음"/"없다"/"받을 수 없"
+    only_with_wiki: "연간 구독은 해지만 가능, 결제된 주기 환불 없음이라는 규칙"
+
+  - id: Q5-abstention
+    description: "위키에도 없는 정보 — 거짓말 안 하는지 검증"
+    history:
+      - "프로젝트 Alpha는 2026-01에 시작했다."
+    new_query: "프로젝트 Alpha 담당 PM 이름은?"
+    gold_must_include: []   # 없다
+    must_not_include:
+      - "김"
+      - "이"
+      - "박"
+    # 이 시나리오는 "위키에도 없으면 바닐라와 똑같이 모른다고 말해야" 합격
+    only_with_wiki: null
+    expect_abstain: true

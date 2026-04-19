@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ringwood-mcp"
+version = "0.1.0"
+description = "MCP server exposing ringwood to Claude Code, Claude.ai, Cursor, Windsurf."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "ringwood contributors" }]
+keywords = [
+    "mcp", "model-context-protocol", "claude", "claude-code",
+    "anthropic", "wiki", "memory", "knowledge-base",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "mcp[cli]>=1.27",
+    "ringwood>=0.1.0",
+    "pyyaml>=6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ringwood/ringwood"
+Issues = "https://github.com/ringwood/ringwood/issues"
+Repository = "https://github.com/ringwood/ringwood"
+
+[project.scripts]
+ringwood-mcp = "ringwood_mcp.server:main"
+ringwood-capture = "ringwood_mcp.capture:main"
+ringwood-cli = "ringwood_mcp.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ringwood_mcp"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "README.md", "LICENSE"]
+
+# While developing in the monorepo, resolve ringwood from the sibling path.
+# Publishing `ringwood-mcp` to PyPI ignores this table; pip uses the dependency
+# version constraint above.
+[tool.uv.sources]
+ringwood = { path = "../ringwood", editable = true }
