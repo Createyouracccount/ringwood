@@ -44,6 +44,9 @@ def register_tools(mcp: FastMCP, wiki: Wiki) -> None:
                 citations.append(Citation.from_page(page))
             except PageNotFound:
                 citations.append(Citation.from_hit(h))
+        # BM25 produces very small values when the corpus is tiny (IDF ≈ 0),
+        # so raw scores round to 0.000 and look broken. Expose rank instead —
+        # what matters for ranking is the order, and rank is language-agnostic.
         return {
             "hits": [
                 {
@@ -51,9 +54,10 @@ def register_tools(mcp: FastMCP, wiki: Wiki) -> None:
                     "title": h.title,
                     "summary": h.summary,
                     "snippet": h.snippet,
-                    "score": round(h.score, 3),
+                    "rank": i + 1,
+                    "score": round(h.score, 6),
                 }
-                for h in hits
+                for i, h in enumerate(hits)
             ],
             "citation_footer": render_footer(citations),
         }
