@@ -35,3 +35,7 @@ wiki-data/
 .idea/
 .vscode/
 *.swp
+
+# ──────── internal-only design docs ────────
+# Kept locally for reference, never published.
+PLAN.md

@@ -4,8 +4,7 @@
   <a href="#install">Install</a> ·
   <a href="#use">Use</a> ·
   <a href="#does-it-actually-work">Evidence</a> ·
-  <a href="#troubleshoot">Troubleshoot</a> ·
-  <a href="./PLAN.md">Design</a>
+  <a href="#troubleshoot">Troubleshoot</a>
 </p>
 
 ---
@@ -171,9 +170,8 @@ Full run: [`docs/ANSWER_QUALITY_REPORT.md`](./docs/ANSWER_QUALITY_REPORT.md)
 (raw answers, judge rationales, JSON dump). One full A/B sweep costs ≈ $0.15.
 
 See also:
-- [`docs/QUALITY_REPORT_PHASE1.md`](./docs/QUALITY_REPORT_PHASE1.md) —
-  45/45 tests pass (21 offline + 24 live), 4 real bugs found and fixed.
-- [`PLAN.md`](./PLAN.md) — the full design rationale.
+[`docs/QUALITY_REPORT_PHASE1.md`](./docs/QUALITY_REPORT_PHASE1.md) —
+45/45 tests pass (21 offline + 24 live), 4 real bugs found and fixed.
 
 ## How it works
 
@@ -209,7 +207,6 @@ everything. Commit to git to share with teammates.
 
 ```
 ringwood/
-├── PLAN.md                  research + design rationale
 ├── docs/
 │   ├── ANSWER_QUALITY_REPORT.md    this is the value proof
 │   ├── QUALITY_REPORT_PHASE1.md    test-suite report

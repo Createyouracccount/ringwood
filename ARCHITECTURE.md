@@ -2,7 +2,6 @@
 
 ```
 ringwood/
-├── PLAN.md                          # 설계 문서
 ├── ARCHITECTURE.md                  # 이 파일 (레이아웃 설명)
 ├── README.md                        # 유저 대면 (Phase 4에서 완성)
 │
