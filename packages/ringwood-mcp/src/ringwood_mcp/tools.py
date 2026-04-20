@@ -11,6 +11,7 @@ Design notes:
 
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -19,6 +20,8 @@ from mcp.server.fastmcp import FastMCP
 from ringwood import Wiki, PageKind, Volatility
 from ringwood.citation import Citation, render_footer
 from ringwood.storage.base import PageNotFound
+
+logger = logging.getLogger(__name__)
 
 
 def register_tools(mcp: FastMCP, wiki: Wiki) -> None:
@@ -43,6 +46,15 @@ def register_tools(mcp: FastMCP, wiki: Wiki) -> None:
                 page = wiki.get(h.page_id)
                 citations.append(Citation.from_page(page))
             except PageNotFound:
+                # Index points at a page file that no longer exists on disk.
+                # Not fatal for this call — we degrade to hit-only citation —
+                # but it means the index is stale and needs a lint. Log it so
+                # operators can see the drift instead of silently shipping
+                # half-metadata citations.
+                logger.warning(
+                    "index/storage drift: %r in FTS5 but missing on disk; run lint_wiki",
+                    h.page_id,
+                )
                 citations.append(Citation.from_hit(h))
         # BM25 produces very small values when the corpus is tiny (IDF ≈ 0),
         # so raw scores round to 0.000 and look broken. Expose rank instead —

@@ -58,7 +58,18 @@ def main() -> None:
         wiki = Wiki(root=root)
         result = wiki.record_answer(question=user_prompt, answer=assistant)
     except Exception as e:
-        _fail_silently(f"record_answer failed: {e}")
+        # Exit 0 so we don't block Claude Code's Stop event, but emit a
+        # systemMessage the user can actually see — a silent failure that
+        # loses a capture is worse than a one-line warning. Include the
+        # exception type (not the full repr, which can leak request URLs).
+        _fail_silently(f"record_answer failed: {type(e).__name__}: {e}")
+        try:
+            json.dump(
+                {"systemMessage": f"[ringwood] capture skipped: {type(e).__name__}"},
+                sys.stdout,
+            )
+        except Exception:
+            pass
         return
 
     # Stdout is consumed by Claude Code. We can emit an optional JSON with a

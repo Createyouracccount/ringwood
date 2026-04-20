@@ -15,10 +15,13 @@ surface. Callers need not know.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
+
+logger = logging.getLogger(__name__)
 
 from .engine.classifier import classify, ClassifyResult
 from .engine.contextualize import contextualize
@@ -107,6 +110,11 @@ class Wiki:
         volatility: Volatility = Volatility.STABLE,
     ) -> IngestResult:
         """Route NEW_INFO through the Decision engine and persist the outcome."""
+        # Empty/whitespace-only text would otherwise derive title="untitled" and
+        # write a 0-byte indexed page — junk that only surfaces months later as
+        # a confusing search hit. Reject at the boundary.
+        if not text or not text.strip():
+            raise ValueError("ingest(text=...) must not be empty")
         # Retrieve candidates from multiple query angles — title alone is
         # too sparse for BM25 to find semantically adjacent pages. Each
         # angle contributes; dedupe by page_id. Without this the decision
@@ -157,6 +165,12 @@ class Wiki:
         """Persist a Q&A as a wiki page if it passes the worthiness classifier.
 
         Returns None when the classifier rejects the answer (no save needed)."""
+        # Empty answers (tool-only turns, aborted generations) would classify
+        # as junk anyway, but a blank question+answer can still sneak a
+        # "untitled" page through the ingest path. Short-circuit here so the
+        # Stop hook spends zero tokens on empty turns.
+        if not answer or not answer.strip():
+            return None
         verdict: ClassifyResult = classify(question, answer, llm=self.llm)
         if not verdict.save:
             self._log(f"skipped (answer not worth saving): {verdict.rationale}")
@@ -282,8 +296,7 @@ class Wiki:
             sources=[source_ref] if source_ref else [],
         )
         page.summary = contextualize(page.title, page.body, llm=self.llm)
-        self.storage.write(page.id, page.to_markdown())
-        self.index.upsert(page)
+        self._persist(page)
         self._log(f"ADD {page.id} | {decision.rationale}")
         return IngestResult(
             operation=Operation.ADD,
@@ -298,14 +311,28 @@ class Wiki:
         new_info: str,
         source_ref: str,
     ) -> IngestResult:
-        assert decision.target_page_id is not None
-        page = self.get(decision.target_page_id)
+        # decide() is supposed to validate target_page_id, but the LLM path
+        # can still emit a non-existent id under adversarial prompts. Treat a
+        # missing/unknown target as "no prior art" and downgrade to ADD rather
+        # than crashing the Stop hook with AssertionError.
+        target = decision.target_page_id
+        if not target or not self.storage.exists(target):
+            self._log(f"UPDATE downgraded to ADD (missing target {target!r})")
+            return self._add(
+                text=new_info,
+                title=_derive_title(new_info),
+                kind=PageKind.SYNTHESIS,
+                tags=[],
+                source_ref=source_ref,
+                volatility=Volatility.STABLE,
+                decision=decision,
+            )
+        page = self.get(target)
         page = rewrite(page, new_info, source_ref, llm=self.llm)
         page.summary = contextualize(page.title, page.body, llm=self.llm)
         page.updated_at = datetime.now(timezone.utc)
         page.last_confirmed = date.today()
-        self.storage.write(page.id, page.to_markdown())
-        self.index.upsert(page)
+        self._persist(page)
         self._log(f"UPDATE {page.id} | {decision.rationale}")
         return IngestResult(
             operation=Operation.UPDATE,
@@ -330,7 +357,22 @@ class Wiki:
         decision: information is never dropped, but the live view reflects
         the new state.
         """
-        assert decision.target_page_id is not None
+        # Same defensive rationale as _update: a hallucinated target_page_id
+        # would crash the Stop hook. Fall through to a plain ADD — the caller
+        # gets a live page and we avoid data loss from an aborted turn.
+        if not decision.target_page_id or not self.storage.exists(decision.target_page_id):
+            self._log(
+                f"SUPERSEDE downgraded to ADD (missing target {decision.target_page_id!r})"
+            )
+            return self._add(
+                text=new_text,
+                title=title,
+                kind=kind,
+                tags=tags,
+                source_ref=source_ref,
+                volatility=volatility,
+                decision=decision,
+            )
         # 1) write the new page first so we have its id for the back-link.
         new_result = self._add(
             text=new_text,
@@ -344,8 +386,7 @@ class Wiki:
         # 2) stamp the old page as invalidated, pointing at the new one.
         old = self.get(decision.target_page_id)
         old.invalidate(superseded_by=new_result.page_id)
-        self.storage.write(old.id, old.to_markdown())
-        self.index.upsert(old)  # valid_flag=0 hides from search
+        self._persist(old)  # index.upsert hides invalidated pages via valid_flag=0
         self._log(
             f"SUPERSEDE {old.id} → {new_result.page_id} | {decision.rationale}"
         )
@@ -363,8 +404,7 @@ class Wiki:
             page.reinforce(agreement_score=1.0)
             if source_ref and source_ref not in page.sources:
                 page.sources.append(source_ref)
-            self.storage.write(page.id, page.to_markdown())
-            self.index.upsert(page)
+            self._persist(page)
             self._log(f"NOOP (reinforced) {page.id}")
             return IngestResult(
                 operation=Operation.NOOP,
@@ -379,6 +419,25 @@ class Wiki:
             rationale=decision.rationale,
             confidence=decision.confidence,
         )
+
+    def _persist(self, page: Page) -> None:
+        """Write the page file first, then update the FTS index.
+
+        The file write is atomic (tempfile + os.replace). The index update is
+        best-effort: on failure, the file is still correct on disk and lint
+        will flag it as an orphan on the next sweep. We log at ERROR so the
+        breach is at least visible in whatever log sink the host captures.
+        """
+        self.storage.write(page.id, page.to_markdown())
+        try:
+            self.index.upsert(page)
+        except Exception as e:
+            logger.error(
+                "index.upsert failed for %s (%s); page is on disk but not searchable until lint",
+                page.id,
+                e,
+            )
+            self._log(f"INDEX_FAIL {page.id} | {e}")
 
     def _uniquify(self, page_id: str) -> str:
         if not self.storage.exists(page_id):

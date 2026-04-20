@@ -151,7 +151,17 @@ class AnthropicClient:
             ) from e
         from anthropic import Anthropic
 
-        self._client = Anthropic(api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"))
+        key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        try:
+            self._client = Anthropic(api_key=key)
+        except Exception as e:
+            # Re-raise WITHOUT the original exception chain so an auth error
+            # containing the API key in its message doesn't reach log sinks.
+            # `from None` severs __cause__/__context__; the original message
+            # is intentionally replaced with a key-free summary.
+            raise RuntimeError(
+                f"failed to initialize Anthropic client: {type(e).__name__}"
+            ) from None
 
     @property
     def available(self) -> bool:
