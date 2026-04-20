@@ -65,13 +65,20 @@ def run_lint(pages: list[Page]) -> LintReport:
     for p in pages:
         if p.invalid_at is not None:
             continue
-        # Freshness: respect volatility bucket.
+        # Staleness is a time-only signal: has this volatility bucket's
+        # freshness window expired? The previous gate also required
+        # cite_count == 0, which meant any page cited once — even years ago —
+        # was considered fresh forever. That hid genuine drift.
         horizon = _freshness_horizon(p.volatility)
         cutoff = today - horizon if horizon else None
         last_edit = p.updated_at.date()
-        if cutoff and last_edit < cutoff and inbound.get(p.id, 0) == 0:
+        if cutoff and last_edit < cutoff:
             report.stale.append(p.id)
-        if inbound.get(p.id, 0) == 0 and p.cite_count == 0:
+        # Orphan is a graph-only signal: no page links to this one.
+        # Intentionally independent of cite_count (which tracks external uses
+        # via record_answer) and from staleness — a freshly written note
+        # with no backlinks is still an orphan worth flagging.
+        if inbound.get(p.id, 0) == 0:
             report.orphans.append(p.id)
 
     return report

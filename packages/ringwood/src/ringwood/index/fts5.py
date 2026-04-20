@@ -12,12 +12,31 @@ text — Anthropic's "Contextual BM25" trick. Dropped retrieval failure from
 
 from __future__ import annotations
 
+import math
 import sqlite3
 from pathlib import Path
 from typing import Iterable
 
 from ..page import Page
 from .base import IndexAdapter, SearchHit
+
+
+# ── Ranking tunables ─────────────────────────────────────────────────────────
+# BM25 column weights. Position-sensitive: page_id, title, summary, tags, body,
+# valid_flag, priority. UNINDEXED columns must receive weight 0.
+_BM25_WEIGHTS = (0.0, 8.0, 4.0, 2.0, 1.0, 0.0, 0.0)
+
+# priority = sqrt(inbound_count) + confidence_weight * confidence.
+# - sqrt damps the popular-page runaway: going from 100→400 inbound only
+#   doubles the boost, keeping a single viral page from swamping fresh ones.
+# - Confidence (0..1) is blended in at a fraction of the inbound signal so a
+#   high-confidence page with zero inbound still beats a noisy orphan, without
+#   letting confidence alone dominate when reinforcement is absent.
+_CONFIDENCE_WEIGHT = 0.5
+
+
+def _compute_priority(page: Page) -> float:
+    return math.sqrt(max(page.inbound_count, 0)) + _CONFIDENCE_WEIGHT * page.confidence
 
 
 _SCHEMA = """
@@ -78,7 +97,7 @@ class Fts5Index(IndexAdapter):
                 " ".join(page.tags),
                 page.body,
                 0 if page.invalid_at is not None else 1,
-                float(page.inbound_count),  # priority surrogate in Phase 0
+                _compute_priority(page),
             ),
         )
 
@@ -88,15 +107,19 @@ class Fts5Index(IndexAdapter):
     def search(self, query: str, limit: int = 10) -> list[SearchHit]:
         if not query.strip():
             return []
-        # Weight the contextual prefix (summary) higher than body; title highest.
-        # FTS5 column weights: page_id, title, summary, tags, body, valid_flag, priority.
-        # UNINDEXED columns must receive weight 0.
-        sql = """
+        # priority is blended into the final ordering as a tiebreaker: BM25
+        # decides the top candidates, then a reinforced / high-confidence page
+        # wins within the same score bucket. Making priority the primary sort
+        # would let a single popular page monopolize results regardless of
+        # query relevance.
+        bm25_args = ", ".join(str(w) for w in _BM25_WEIGHTS)
+        sql = f"""
             SELECT page_id,
                    title,
                    summary,
                    snippet(pages, 4, '«', '»', ' … ', 16) AS snip,
-                   -bm25(pages, 0.0, 8.0, 4.0, 2.0, 1.0, 0.0, 0.0) AS score
+                   -bm25(pages, {bm25_args}) AS score,
+                   priority
             FROM pages
             WHERE pages MATCH ?
               AND valid_flag = 1

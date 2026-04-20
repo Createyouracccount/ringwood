@@ -207,18 +207,12 @@ class Wiki:
         "백엔드 네이밍 컨벤션" even though they overlap semantically.
         Querying with body excerpts recovers most of that gap on Phase 0
         (no embeddings yet). Phase 5 swaps this for hybrid dense+BM25.
+
+        The first-line cap used to be 200 chars, which truncated domain
+        phrases like "React Server Component" mid-word. 400 matches the
+        body-excerpt cap and lets a full entity name survive tokenization.
         """
-        queries: list[str] = []
-        if title:
-            queries.append(title)
-        # First sentence of the body — usually contains the entity name.
-        first_line = text.strip().split("\n", 1)[0][:200]
-        if first_line and first_line != title:
-            queries.append(first_line)
-        # Longer excerpt for broader term overlap.
-        body_excerpt = text.strip()[:400]
-        if body_excerpt and body_excerpt not in queries:
-            queries.append(body_excerpt)
+        queries = _build_candidate_queries(text=text, title=title)
 
         seen: dict[str, SearchHit] = {}
         for q in queries:
@@ -453,6 +447,45 @@ class Wiki:
 
 
 # ── Module helpers ────────────────────────────────────────────────────────
+
+
+# Per-angle caps for candidate retrieval. 400 chars is roughly one paragraph
+# after FTS5 trigram tokenization and matches the body-excerpt cap so no
+# angle loses phrases mid-word. 2000 is a guard against pathological input
+# (file dumps, base64 blobs) that would stress the FTS query parser.
+_CANDIDATE_FIRST_LINE_CAP = 400
+_CANDIDATE_BODY_EXCERPT_CAP = 400
+_CANDIDATE_MAX_QUERY_CHARS = 2000
+
+
+def _build_candidate_queries(*, text: str, title: str | None) -> list[str]:
+    """Return 1–3 query strings covering distinct views of the new info.
+
+    The title is a distinct signal — keep it even when it prefixes the body,
+    because BM25 will weight the title column higher. Prefix-dedup only
+    applies between the body-derived queries (first_line vs body_excerpt),
+    where a near-identical leading ~200 chars would just double-count hits.
+    """
+    body = text.strip()[:_CANDIDATE_MAX_QUERY_CHARS]
+    queries: list[str] = []
+    if title and title.strip():
+        queries.append(title.strip())
+
+    body_queries: list[str] = []
+
+    def _append_body(candidate: str) -> None:
+        if not candidate:
+            return
+        for existing in body_queries:
+            if existing.startswith(candidate) or candidate.startswith(existing):
+                return
+        body_queries.append(candidate)
+
+    first_line = body.split("\n", 1)[0][:_CANDIDATE_FIRST_LINE_CAP]
+    _append_body(first_line)
+    _append_body(body[:_CANDIDATE_BODY_EXCERPT_CAP])
+    queries.extend(body_queries)
+    return queries
 
 
 def _derive_title(text: str, max_len: int = 80) -> str:
