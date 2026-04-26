@@ -87,8 +87,11 @@ class Wiki:
 
     # ── Search / get ─────────────────────────────────────────────────────
 
-    def search(self, query: str, limit: int = 10) -> list[SearchHit]:
-        return self.index.search(query, limit=limit)
+    def search(
+        self, query: str, limit: int = 10, *, kind: str | PageKind | None = None
+    ) -> list[SearchHit]:
+        kind_value = kind.value if isinstance(kind, PageKind) else kind
+        return self.index.search(query, limit=limit, kind=kind_value)
 
     def get(self, page_id: str) -> Page:
         text = self.storage.read(page_id)     # may raise PageNotFound

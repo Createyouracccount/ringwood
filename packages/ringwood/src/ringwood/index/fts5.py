@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import math
 import sqlite3
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Iterable
 
@@ -23,20 +24,44 @@ from .base import IndexAdapter, SearchHit
 
 # ── Ranking tunables ─────────────────────────────────────────────────────────
 # BM25 column weights. Position-sensitive: page_id, title, summary, tags, body,
-# valid_flag, priority. UNINDEXED columns must receive weight 0.
-_BM25_WEIGHTS = (0.0, 8.0, 4.0, 2.0, 1.0, 0.0, 0.0)
+# valid_flag, priority, kind. UNINDEXED columns must receive weight 0.
+_BM25_WEIGHTS = (0.0, 8.0, 4.0, 2.0, 1.0, 0.0, 0.0, 0.0)
 
-# priority = sqrt(inbound_count) + confidence_weight * confidence.
+# priority = sqrt(inbound_count) + confidence_weight * confidence + recency_weight * recency.
 # - sqrt damps the popular-page runaway: going from 100→400 inbound only
 #   doubles the boost, keeping a single viral page from swamping fresh ones.
 # - Confidence (0..1) is blended in at a fraction of the inbound signal so a
 #   high-confidence page with zero inbound still beats a noisy orphan, without
 #   letting confidence alone dominate when reinforcement is absent.
+# - Recency uses a 90d half-life decay on last_confirmed: a page reconfirmed
+#   today gets the full bump, one untouched for 90d is at 0.5, 180d at 0.25.
+#   Weighted lower than confidence so a stale-but-validated stable page still
+#   outranks a fresh-but-orphaned one.
 _CONFIDENCE_WEIGHT = 0.5
+_RECENCY_WEIGHT = 0.3
+_RECENCY_HALF_LIFE_DAYS = 90.0
+
+
+def _recency_score(page: Page, *, today: date | None = None) -> float:
+    """0..1 score: 1.0 = confirmed today, 0.5 at half-life, → 0 as it ages.
+
+    Falls back to created_at when last_confirmed is missing, so freshly added
+    pages don't get penalized as stale before they've had a chance to be cited.
+    """
+    anchor = page.last_confirmed or page.created_at.date()
+    days = max((today or date.today()) - anchor, _ZERO_DELTA).days
+    return 0.5 ** (days / _RECENCY_HALF_LIFE_DAYS)
+
+
+_ZERO_DELTA = timedelta(0)
 
 
 def _compute_priority(page: Page) -> float:
-    return math.sqrt(max(page.inbound_count, 0)) + _CONFIDENCE_WEIGHT * page.confidence
+    return (
+        math.sqrt(max(page.inbound_count, 0))
+        + _CONFIDENCE_WEIGHT * page.confidence
+        + _RECENCY_WEIGHT * _recency_score(page)
+    )
 
 
 _SCHEMA = """
@@ -54,7 +79,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS pages USING fts5(
     tags,
     body,
     valid_flag    UNINDEXED, -- 1 if live, 0 if invalidated
-    priority      UNINDEXED, -- z_score(inbound_count) for ranking boost
+    priority      UNINDEXED, -- sqrt(inbound) + confidence + recency boost
+    kind          UNINDEXED, -- PageKind value, optional filter for scoped search
     tokenize = 'trigram'
 );
 
@@ -80,6 +106,17 @@ class Fts5Index(IndexAdapter):
         self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.execute("PRAGMA busy_timeout = 5000")
         self._conn.executescript(_SCHEMA)
+        # Schema migration: existing DBs from before the `kind` column was
+        # added still have a 7-column virtual table. FTS5 doesn't support
+        # ALTER TABLE ADD COLUMN, so the only safe path is drop + recreate.
+        # The caller (Wiki) rebuilds from page files on next ingest/lint.
+        if not self._has_kind_column():
+            self._conn.execute("DROP TABLE IF EXISTS pages")
+            self._conn.executescript(_SCHEMA)
+
+    def _has_kind_column(self) -> bool:
+        cols = self._conn.execute("PRAGMA table_info(pages)").fetchall()
+        return any(c[1] == "kind" for c in cols)
 
     # ── IndexAdapter ─────────────────────────────────────────────────────
 
@@ -88,8 +125,8 @@ class Fts5Index(IndexAdapter):
         self._conn.execute("DELETE FROM pages WHERE page_id = ?", (page.id,))
         self._conn.execute(
             """INSERT INTO pages
-               (page_id, title, summary, tags, body, valid_flag, priority)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               (page_id, title, summary, tags, body, valid_flag, priority, kind)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 page.id,
                 page.title,
@@ -98,13 +135,16 @@ class Fts5Index(IndexAdapter):
                 page.body,
                 0 if page.invalid_at is not None else 1,
                 _compute_priority(page),
+                page.kind.value,
             ),
         )
 
     def delete(self, page_id: str) -> None:
         self._conn.execute("DELETE FROM pages WHERE page_id = ?", (page_id,))
 
-    def search(self, query: str, limit: int = 10) -> list[SearchHit]:
+    def search(
+        self, query: str, limit: int = 10, *, kind: str | None = None
+    ) -> list[SearchHit]:
         if not query.strip():
             return []
         # priority is blended into the final ordering as a tiebreaker: BM25
@@ -113,6 +153,7 @@ class Fts5Index(IndexAdapter):
         # would let a single popular page monopolize results regardless of
         # query relevance.
         bm25_args = ", ".join(str(w) for w in _BM25_WEIGHTS)
+        kind_clause = "AND kind = ?" if kind else ""
         sql = f"""
             SELECT page_id,
                    title,
@@ -123,14 +164,17 @@ class Fts5Index(IndexAdapter):
             FROM pages
             WHERE pages MATCH ?
               AND valid_flag = 1
+              {kind_clause}
             ORDER BY score DESC, priority DESC
             LIMIT ?
         """
+        params: tuple = (_escape_fts(query), kind, limit) if kind else (_escape_fts(query), limit)
         try:
-            rows = self._conn.execute(sql, (_escape_fts(query), limit)).fetchall()
+            rows = self._conn.execute(sql, params).fetchall()
         except sqlite3.OperationalError:
             # malformed FTS query — retry with quoted phrase
-            rows = self._conn.execute(sql, (f'"{query}"', limit)).fetchall()
+            fallback = (f'"{query}"', kind, limit) if kind else (f'"{query}"', limit)
+            rows = self._conn.execute(sql, fallback).fetchall()
         return [
             SearchHit(page_id=r[0], title=r[1], summary=r[2], score=float(r[4]), snippet=r[3])
             for r in rows

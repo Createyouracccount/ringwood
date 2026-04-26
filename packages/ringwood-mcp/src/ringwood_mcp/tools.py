@@ -27,18 +27,33 @@ logger = logging.getLogger(__name__)
 def register_tools(mcp: FastMCP, wiki: Wiki) -> None:
 
     @mcp.tool()
-    async def search_wiki(query: str, limit: int = 10) -> dict:
+    async def search_wiki(
+        query: str, limit: int = 10, kind: str | None = None
+    ) -> dict:
         """Search the wiki for pages relevant to `query`.
 
         Invalidated (superseded) pages are excluded automatically. Call this
         BEFORE answering domain questions so you can ground the response in
         the user's own prior knowledge.
 
+        `kind` optionally restricts results to one PageKind: entity, concept,
+        decision, query, synthesis. Use it when the question shape is
+        unambiguous (e.g. "what did we decide about X?" → kind="decision",
+        "have I asked this before?" → kind="query") to cut cross-category
+        noise. Leave unset for general lookups.
+
         Returns {"hits": [...], "citation_footer": "📚 Referenced: ..."}.
         When you cite the wiki in your reply, append the citation_footer
         verbatim so the user sees what they actually got from their wiki.
         """
-        hits = wiki.search(query, limit=limit)
+        if kind is not None:
+            try:
+                PageKind(kind)
+            except ValueError:
+                raise ValueError(
+                    f"invalid kind {kind!r}; expected one of: entity, concept, decision, query, synthesis"
+                )
+        hits = wiki.search(query, limit=limit, kind=kind)
         # Pull full pages for citation metadata (cite_count, last_confirmed)
         citations: list[Citation] = []
         for h in hits:

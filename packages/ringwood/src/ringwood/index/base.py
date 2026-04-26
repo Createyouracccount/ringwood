@@ -30,8 +30,15 @@ class IndexAdapter(Protocol):
         Soft deletes (invalid_at) are handled by filtering at search time."""
         ...
 
-    def search(self, query: str, limit: int = 10) -> list[SearchHit]:
-        """Full-text search. Invalid pages MUST be excluded by the adapter."""
+    def search(
+        self, query: str, limit: int = 10, *, kind: str | None = None
+    ) -> list[SearchHit]:
+        """Full-text search. Invalid pages MUST be excluded by the adapter.
+
+        When `kind` is provided, results are restricted to pages of that
+        PageKind value (e.g. "decision", "query"). Adapters that cannot
+        filter natively should filter post-hoc on the result set.
+        """
         ...
 
     def rebuild(self, pages: list[Page]) -> None:
