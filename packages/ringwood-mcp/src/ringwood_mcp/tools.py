@@ -24,6 +24,24 @@ from ringwood.storage.base import PageNotFound
 logger = logging.getLogger(__name__)
 
 
+def _footer_for_ids(wiki: Wiki, page_ids: list[str]) -> str:
+    """Build a citation_footer for any tool that surfaces wiki pages.
+
+    Tools that touch the wiki should consistently emit a `📚 Referenced: …`
+    line so the user can tell their wiki helped (PLAN.md §7 — "growth is
+    visible"). Pages that vanished between index and read are skipped: we
+    log on the search path; here a missing page just means a stale tool
+    response, not a bug to surface.
+    """
+    citations: list[Citation] = []
+    for pid in page_ids:
+        try:
+            citations.append(Citation.from_page(wiki.get(pid)))
+        except PageNotFound:
+            continue
+    return render_footer(citations)
+
+
 def register_tools(mcp: FastMCP, wiki: Wiki) -> None:
 
     @mcp.tool()
@@ -114,6 +132,7 @@ def register_tools(mcp: FastMCP, wiki: Wiki) -> None:
             "inbound_count": page.inbound_count,
             "cite_count": page.cite_count,
             "sources": page.sources,
+            "citation_footer": render_footer([Citation.from_page(page)]),
         }
 
     @mcp.tool()
@@ -160,6 +179,7 @@ def register_tools(mcp: FastMCP, wiki: Wiki) -> None:
             "page_id": result.page_id,
             "rationale": result.rationale,
             "confidence": result.confidence,
+            "citation_footer": _footer_for_ids(wiki, [result.page_id] if result.page_id else []),
         }
 
     @mcp.tool()
@@ -187,6 +207,7 @@ def register_tools(mcp: FastMCP, wiki: Wiki) -> None:
             "operation": result.operation.value,
             "page_id": result.page_id,
             "rationale": result.rationale,
+            "citation_footer": _footer_for_ids(wiki, [result.page_id] if result.page_id else []),
         }
 
     @mcp.tool()
@@ -197,6 +218,7 @@ def register_tools(mcp: FastMCP, wiki: Wiki) -> None:
         surface fresh context at session start.
         """
         stats = wiki.stats(period="week" if days <= 7 else "month")
+        top_ids = [pid for pid, _ in stats.top_cited]
         return {
             "period_days": days,
             "new_pages": stats.new_pages,
@@ -204,6 +226,7 @@ def register_tools(mcp: FastMCP, wiki: Wiki) -> None:
             "invalidated_pages": stats.invalidated_pages,
             "questions_answered": stats.questions,
             "top_cited": [{"page_id": pid, "cite_count": n} for pid, n in stats.top_cited],
+            "citation_footer": _footer_for_ids(wiki, top_ids),
         }
 
     @mcp.tool()

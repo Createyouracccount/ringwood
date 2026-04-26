@@ -30,6 +30,11 @@ wiki-data/
 *.sqlite*
 *.db-journal
 
+# ──────── live test outputs ────────
+# A/B run results contain team facts; regenerated on every run.
+packages/ringwood/tests_live/quality_run.json
+packages/ringwood/tests_live/*_run.json
+
 # macOS / editor
 .DS_Store
 .idea/

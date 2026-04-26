@@ -7,6 +7,7 @@ happens without a GUI.
   stats      — week/month summary: questions, new pages, top cited
   timeline   — render log.md as a human-readable chronology
   diff       — changes in the last N days
+  graph      — wikilink adjacency graph (DOT or JSON)
   list       — ids of pages, optionally filtered by kind
   show       — full markdown of a page by id
   lint       — run the integrity check and print the report
@@ -49,6 +50,19 @@ def main(argv: list[str] | None = None) -> int:
     p_diff = sub.add_parser("diff", help="pages changed in the last N days")
     p_diff.add_argument("--days", type=int, default=7)
 
+    p_graph = sub.add_parser("graph", help="wikilink adjacency graph")
+    p_graph.add_argument(
+        "--format",
+        choices=("dot", "json", "text"),
+        default="text",
+        help="dot for Graphviz, json for tooling, text for terminal (default)",
+    )
+    p_graph.add_argument(
+        "--include-invalid",
+        action="store_true",
+        help="include invalidated pages as nodes",
+    )
+
     p_list = sub.add_parser("list", help="list page ids")
     p_list.add_argument("--kind", default=None, help="filter by kind prefix (e.g. concept)")
 
@@ -69,6 +83,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_timeline(wiki, tail=args.tail)
     if args.cmd == "diff":
         return _cmd_diff(wiki, days=args.days)
+    if args.cmd == "graph":
+        return _cmd_graph(
+            wiki, fmt=args.format, include_invalid=args.include_invalid
+        )
     if args.cmd == "list":
         return _cmd_list(wiki, kind=args.kind)
     if args.cmd == "show":
@@ -150,6 +168,46 @@ def _cmd_diff(wiki: Wiki, *, days: int) -> int:
     for tag, pid, title in changed:
         mark = {"NEW": "+", "UPD": "~", "INVAL": "✕"}[tag]
         print(f"{mark} {pid:<40} {title}")
+    return 0
+
+
+def _cmd_graph(wiki: Wiki, *, fmt: str, include_invalid: bool) -> int:
+    g = wiki.graph(include_invalid=include_invalid)
+    if not g.nodes:
+        print("(no pages — wiki is empty)")
+        return 0
+
+    if fmt == "dot":
+        sys.stdout.write(g.to_dot())
+        return 0
+    if fmt == "json":
+        json.dump(g.to_json_dict(), sys.stdout, ensure_ascii=False, indent=2)
+        print()
+        return 0
+
+    # text mode: per-page outgoing edges, plus broken-link section.
+    out: dict[str, list[str]] = {pid: [] for pid in g.nodes}
+    for src, dst in g.edges:
+        out.setdefault(src, []).append(dst)
+
+    broken: list[tuple[str, str]] = []
+    print(f"🕸  {len(g.nodes)} nodes, {len(g.edges)} edges")
+    for pid in sorted(g.nodes):
+        if pid.startswith("?"):
+            continue
+        targets = out.get(pid, [])
+        if not targets:
+            print(f"  {pid}  (no outbound)")
+            continue
+        for t in targets:
+            if t.startswith("?"):
+                broken.append((pid, t[1:]))
+            print(f"  {pid}  →  {t}")
+    if broken:
+        print()
+        print(f"✗ {len(broken)} broken link(s):")
+        for src, raw in broken:
+            print(f"  {src}  →  [[{raw}]]")
     return 0
 
 

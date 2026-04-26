@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 from .engine.classifier import classify, ClassifyResult
 from .engine.contextualize import contextualize
 from .engine.decision import decide, Operation, Decision, format_candidates_for_prompt
-from .engine.lint import run_lint, LintReport
+from .engine.lint import run_lint, LintReport, _WIKILINK, _resolve_wikilink
 from .engine.rewriter import rewrite
 from .env import load_env
 from .index import Fts5Index, IndexAdapter, SearchHit
@@ -44,6 +44,36 @@ class IngestResult:
     page_id: str
     rationale: str
     confidence: float
+
+
+@dataclass
+class WikiGraph:
+    """Adjacency view of [[wikilink]] edges across the wiki.
+
+    `nodes` is keyed by page_id and carries the title for display. `edges`
+    points from the citing page to the cited page; a cited target that
+    can't be resolved becomes a node with a leading `?` so DOT/JSON
+    consumers can still render the broken edge instead of dropping it.
+    """
+
+    nodes: dict[str, str] = field(default_factory=dict)            # page_id -> title
+    edges: list[tuple[str, str]] = field(default_factory=list)     # (src, dst)
+
+    def to_dot(self) -> str:
+        lines = ["digraph wiki {", '  rankdir="LR";', '  node [shape=box, fontsize=10];']
+        for pid, title in sorted(self.nodes.items()):
+            label = title.replace('"', "'")
+            lines.append(f'  "{pid}" [label="{label}\\n{pid}"];')
+        for src, dst in self.edges:
+            lines.append(f'  "{src}" -> "{dst}";')
+        lines.append("}")
+        return "\n".join(lines) + "\n"
+
+    def to_json_dict(self) -> dict:
+        return {
+            "nodes": [{"id": pid, "title": title} for pid, title in sorted(self.nodes.items())],
+            "edges": [{"src": s, "dst": d} for s, d in self.edges],
+        }
 
 
 @dataclass
@@ -197,6 +227,34 @@ class Wiki:
         report = run_lint(pages)
         self._log(f"lint | {report.summary_line()}")
         return report
+
+    def graph(self, *, include_invalid: bool = False) -> WikiGraph:
+        """Build the [[wikilink]] adjacency graph across all live pages.
+
+        Reuses the lint engine's wikilink regex + resolver so a target shows
+        up at the same id whether you arrive via lint or graph. Unresolved
+        targets are kept as `?<raw>` nodes — silently dropping them would
+        make a broken-link page look orphaned in graph view.
+        """
+        pages = [self.get(pid) for pid in self.list_ids()]
+        if not include_invalid:
+            pages = [p for p in pages if p.invalid_at is None]
+        by_id = {p.id: p for p in pages}
+
+        g = WikiGraph()
+        for p in pages:
+            g.nodes[p.id] = p.title
+        for p in pages:
+            for m in _WIKILINK.finditer(p.body):
+                raw = m.group(1).strip()
+                target = _resolve_wikilink(raw, by_id)
+                if target is None:
+                    placeholder = f"?{raw}"
+                    g.nodes.setdefault(placeholder, f"(unresolved) {raw}")
+                    g.edges.append((p.id, placeholder))
+                else:
+                    g.edges.append((p.id, target))
+        return g
 
     # ── Candidate retrieval (internal) ───────────────────────────────────
 
